@@ -10,9 +10,10 @@ interface DesignIdeasListProps {
   onEdit: (idea: DesignIdea) => void;
   onDelete: (id: string) => void;
   onView: (idea: DesignIdea) => void;
+  readOnly?: boolean;
 }
 
-export function DesignIdeasList({ ideas, onEdit, onDelete, onView }: DesignIdeasListProps) {
+export function DesignIdeasList({ ideas, onEdit, onDelete, onView, readOnly = false }: DesignIdeasListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
@@ -95,6 +96,7 @@ export function DesignIdeasList({ ideas, onEdit, onDelete, onView }: DesignIdeas
               onEdit={() => onEdit(idea)}
               onDelete={() => onDelete(idea.id)}
               onView={() => onView(idea)}
+              readOnly={readOnly}
             />
           ))}
         </div>

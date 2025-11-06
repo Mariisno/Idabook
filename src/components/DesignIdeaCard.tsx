@@ -11,6 +11,7 @@ interface DesignIdeaCardProps {
   onEdit: () => void;
   onDelete: () => void;
   onView: () => void;
+  readOnly?: boolean;
 }
 
 const priorityColors = {
@@ -33,7 +34,7 @@ const statusLabels = {
   archived: 'Archived',
 };
 
-export function DesignIdeaCard({ idea, onEdit, onDelete, onView }: DesignIdeaCardProps) {
+export function DesignIdeaCard({ idea, onEdit, onDelete, onView, readOnly = false }: DesignIdeaCardProps) {
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -46,44 +47,46 @@ export function DesignIdeaCard({ idea, onEdit, onDelete, onView }: DesignIdeaCar
           <div className="flex-1 min-w-0">
             <h3 className="text-slate-900 truncate">{idea.title}</h3>
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-8 w-8 shrink-0"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <MoreVertical className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }}>
-                <Edit className="w-4 h-4 mr-2" />
-                Edit
-              </DropdownMenuItem>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Delete
-                  </DropdownMenuItem>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete this idea?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This action cannot be undone. This will permanently delete "{idea.title}".
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={onDelete}>Delete</AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {!readOnly && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 shrink-0"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <MoreVertical className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }}>
+                  <Edit className="w-4 h-4 mr-2" />
+                  Edit
+                </DropdownMenuItem>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete
+                    </DropdownMenuItem>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete this idea?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This action cannot be undone. This will permanently delete "{idea.title}".
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={onDelete}>Delete</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
         <div className="flex flex-wrap gap-2 mt-3">
           <Badge variant="outline" className={statusColors[idea.status]}>
@@ -92,6 +95,11 @@ export function DesignIdeaCard({ idea, onEdit, onDelete, onView }: DesignIdeaCar
           <Badge variant="outline" className={priorityColors[idea.priority]}>
             {idea.priority.charAt(0).toUpperCase() + idea.priority.slice(1)}
           </Badge>
+          {idea.isShared && (
+            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-300">
+              Shared
+            </Badge>
+          )}
         </div>
       </CardHeader>
 

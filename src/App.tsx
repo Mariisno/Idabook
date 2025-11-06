@@ -2,9 +2,13 @@ import { useState, useEffect } from 'react';
 import { DesignIdeasList } from './components/DesignIdeasList';
 import { DesignIdeaForm } from './components/DesignIdeaForm';
 import { DesignIdeaDetail } from './components/DesignIdeaDetail';
+import { AuthForm } from './components/AuthForm';
 import { Button } from './components/ui/button';
-import { Plus } from 'lucide-react';
+import { Plus, LogOut, Users } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './components/ui/dialog';
+import { createClient } from './utils/supabase/client';
+import { projectId, publicAnonKey } from './utils/supabase/info';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 
 export interface DesignIdea {
   id: string;
@@ -15,28 +19,143 @@ export interface DesignIdea {
   images: string[];
   priority: 'low' | 'medium' | 'high';
   status: 'idea' | 'in-progress' | 'completed' | 'archived';
+  isShared: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
 export default function App() {
-  const [ideas, setIdeas] = useState<DesignIdea[]>([]);
+  const [user, setUser] = useState<any>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [userIdeas, setUserIdeas] = useState<DesignIdea[]>([]);
+  const [sharedIdeas, setSharedIdeas] = useState<DesignIdea[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingIdea, setEditingIdea] = useState<DesignIdea | null>(null);
   const [viewingIdea, setViewingIdea] = useState<DesignIdea | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Load ideas from localStorage on mount
+  const supabase = createClient();
+
+  // Check for existing session on mount
   useEffect(() => {
-    const stored = localStorage.getItem('designIdeas');
-    if (stored) {
-      setIdeas(JSON.parse(stored));
-    }
+    checkSession();
   }, []);
 
-  // Save ideas to localStorage whenever they change
+  const checkSession = async () => {
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUser(session.user);
+        setAccessToken(session.access_token);
+        await loadIdeas(session.access_token);
+      }
+    } catch (error) {
+      console.error('Session check error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadIdeas = async (token: string) => {
+    try {
+      const response = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/make-server-8b6272cb/ideas`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setUserIdeas(data.userIdeas || []);
+        setSharedIdeas(data.sharedIdeas || []);
+      } else {
+        console.error('Failed to load ideas:', await response.text());
+      }
+    } catch (error) {
+      console.error('Load ideas error:', error);
+    }
+  };
+
+  const saveIdeas = async (ideas: DesignIdea[]) => {
+    if (!accessToken) return;
+
+    try {
+      const response = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/make-server-8b6272cb/ideas`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ ideas }),
+        }
+      );
+
+      if (!response.ok) {
+        console.error('Failed to save ideas:', await response.text());
+      }
+    } catch (error) {
+      console.error('Save ideas error:', error);
+    }
+  };
+
+  // Save user ideas whenever they change
   useEffect(() => {
-    localStorage.setItem('designIdeas', JSON.stringify(ideas));
-  }, [ideas]);
+    if (user && userIdeas.length >= 0) {
+      saveIdeas(userIdeas);
+    }
+  }, [userIdeas]);
+
+  const handleLogin = async (email: string, password: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    if (data.session) {
+      setUser(data.user);
+      setAccessToken(data.session.access_token);
+      await loadIdeas(data.session.access_token);
+    }
+  };
+
+  const handleSignup = async (email: string, password: string, name: string) => {
+    const response = await fetch(
+      `https://${projectId}.supabase.co/functions/v1/make-server-8b6272cb/signup`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${publicAnonKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password, name }),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to sign up');
+    }
+
+    // After signup, log in
+    await handleLogin(email, password);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setAccessToken(null);
+    setUserIdeas([]);
+    setSharedIdeas([]);
+  };
 
   const handleAddIdea = (idea: Omit<DesignIdea, 'id' | 'createdAt' | 'updatedAt'>) => {
     const newIdea: DesignIdea = {
@@ -45,12 +164,12 @@ export default function App() {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    setIdeas([newIdea, ...ideas]);
+    setUserIdeas([newIdea, ...userIdeas]);
     setIsDialogOpen(false);
   };
 
   const handleUpdateIdea = (id: string, updates: Omit<DesignIdea, 'id' | 'createdAt' | 'updatedAt'>) => {
-    setIdeas(ideas.map(idea => 
+    setUserIdeas(userIdeas.map(idea => 
       idea.id === id 
         ? { ...idea, ...updates, updatedAt: new Date().toISOString() }
         : idea
@@ -60,7 +179,7 @@ export default function App() {
   };
 
   const handleDeleteIdea = (id: string) => {
-    setIdeas(ideas.filter(idea => idea.id !== id));
+    setUserIdeas(userIdeas.filter(idea => idea.id !== id));
   };
 
   const handleEditClick = (idea: DesignIdea) => {
@@ -82,6 +201,18 @@ export default function App() {
     setViewingIdea(null);
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
+        <p className="text-slate-600">Loading...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthForm onLogin={handleLogin} onSignup={handleSignup} />;
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
@@ -94,20 +225,48 @@ export default function App() {
                 Capture and organize your creative concepts
               </p>
             </div>
-            <Button onClick={() => setIsDialogOpen(true)} className="gap-2">
-              <Plus className="w-4 h-4" />
-              New Idea
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button onClick={() => setIsDialogOpen(true)} className="gap-2">
+                <Plus className="w-4 h-4" />
+                New Idea
+              </Button>
+              <Button onClick={handleLogout} variant="outline" className="gap-2">
+                <LogOut className="w-4 h-4" />
+                Logout
+              </Button>
+            </div>
           </div>
         </div>
 
-        {/* Ideas List */}
-        <DesignIdeasList 
-          ideas={ideas}
-          onEdit={handleEditClick}
-          onDelete={handleDeleteIdea}
-          onView={handleViewClick}
-        />
+        {/* Ideas Tabs */}
+        <Tabs defaultValue="my-ideas" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="my-ideas">My Ideas</TabsTrigger>
+            <TabsTrigger value="shared" className="gap-2">
+              <Users className="w-4 h-4" />
+              Shared Ideas
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="my-ideas">
+            <DesignIdeasList 
+              ideas={userIdeas}
+              onEdit={handleEditClick}
+              onDelete={handleDeleteIdea}
+              onView={handleViewClick}
+            />
+          </TabsContent>
+
+          <TabsContent value="shared">
+            <DesignIdeasList 
+              ideas={sharedIdeas}
+              onEdit={() => {}}
+              onDelete={() => {}}
+              onView={handleViewClick}
+              readOnly
+            />
+          </TabsContent>
+        </Tabs>
 
         {/* Add/Edit Dialog */}
         <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>

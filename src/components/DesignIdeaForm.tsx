@@ -6,6 +6,7 @@ import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Badge } from './ui/badge';
+import { Switch } from './ui/switch';
 import { X, Upload, Image as ImageIcon } from 'lucide-react';
 
 interface DesignIdeaFormProps {
@@ -23,6 +24,7 @@ export function DesignIdeaForm({ idea, onSubmit, onCancel }: DesignIdeaFormProps
   const [tagInput, setTagInput] = useState('');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>(idea?.priority || 'medium');
   const [status, setStatus] = useState<'idea' | 'in-progress' | 'completed' | 'archived'>(idea?.status || 'idea');
+  const [isShared, setIsShared] = useState(idea?.isShared || false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleAddTag = () => {
@@ -81,6 +83,7 @@ export function DesignIdeaForm({ idea, onSubmit, onCancel }: DesignIdeaFormProps
       images,
       priority,
       status,
+      isShared,
     });
   };
 
@@ -152,6 +155,21 @@ export function DesignIdeaForm({ idea, onSubmit, onCancel }: DesignIdeaFormProps
             </SelectContent>
           </Select>
         </div>
+      </div>
+
+      {/* Sharing */}
+      <div className="flex items-center justify-between p-4 border rounded-lg bg-slate-50">
+        <div className="flex-1">
+          <Label htmlFor="isShared" className="cursor-pointer">Share with others</Label>
+          <p className="text-sm text-slate-600 mt-1">
+            Allow others to view this idea for collaboration
+          </p>
+        </div>
+        <Switch
+          id="isShared"
+          checked={isShared}
+          onCheckedChange={setIsShared}
+        />
       </div>
 
       {/* Tags */}
