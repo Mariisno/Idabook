@@ -3,7 +3,7 @@ import { Card, CardContent, CardFooter, CardHeader } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
-import { MoreVertical, Edit, Trash2, Clock } from 'lucide-react';
+import { MoreVertical, Edit, Trash2, Clock, User, Users } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 
 interface DesignIdeaCardProps {
@@ -155,10 +155,24 @@ export function DesignIdeaCard({ idea, onEdit, onDelete, onView, readOnly = fals
         )}
       </CardContent>
 
-      <CardFooter className="pt-3 border-t">
-        <div className="flex items-center gap-1.5 text-slate-500 text-xs">
+      <CardFooter className="pt-3 border-t flex-col items-start gap-2">
+        <div className="flex items-center gap-1.5 text-slate-500 text-xs w-full">
           <Clock className="w-3.5 h-3.5" />
           <span>Updated {formatDate(idea.updatedAt)}</span>
+        </div>
+        
+        {/* Owner and Collaborators */}
+        <div className="flex items-center gap-2 w-full text-xs">
+          <div className="flex items-center gap-1 text-slate-600">
+            <User className="w-3.5 h-3.5" />
+            <span>{idea.ownerName}</span>
+          </div>
+          {idea.collaborators && idea.collaborators.length > 0 && (
+            <div className="flex items-center gap-1 text-slate-500">
+              <Users className="w-3.5 h-3.5" />
+              <span>+{idea.collaborators.length}</span>
+            </div>
+          )}
         </div>
       </CardFooter>
     </Card>

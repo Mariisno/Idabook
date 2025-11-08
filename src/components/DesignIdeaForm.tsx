@@ -8,14 +8,27 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from './ui/badge';
 import { Switch } from './ui/switch';
 import { X, Upload, Image as ImageIcon } from 'lucide-react';
+import { CollaboratorManager } from './CollaboratorManager';
 
 interface DesignIdeaFormProps {
   idea?: DesignIdea | null;
   onSubmit: (data: Omit<DesignIdea, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onCancel: () => void;
+  onSearchUsers?: (query: string) => Promise<Array<{ id: string; name: string; email: string }>>;
+  onAddCollaborator?: (ideaId: string, userId: string, userName: string) => Promise<void>;
+  onRemoveCollaborator?: (ideaId: string, userId: string) => Promise<void>;
+  followingIds?: string[];
 }
 
-export function DesignIdeaForm({ idea, onSubmit, onCancel }: DesignIdeaFormProps) {
+export function DesignIdeaForm({ 
+  idea, 
+  onSubmit, 
+  onCancel,
+  onSearchUsers,
+  onAddCollaborator,
+  onRemoveCollaborator,
+  followingIds = []
+}: DesignIdeaFormProps) {
   const [title, setTitle] = useState(idea?.title || '');
   const [description, setDescription] = useState(idea?.description || '');
   const [details, setDetails] = useState(idea?.details || '');
@@ -25,6 +38,7 @@ export function DesignIdeaForm({ idea, onSubmit, onCancel }: DesignIdeaFormProps
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>(idea?.priority || 'medium');
   const [status, setStatus] = useState<'idea' | 'in-progress' | 'completed' | 'archived'>(idea?.status || 'idea');
   const [isShared, setIsShared] = useState(idea?.isShared || false);
+  const [collaborators, setCollaborators] = useState(idea?.collaborators || []);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleAddTag = () => {
@@ -84,6 +98,9 @@ export function DesignIdeaForm({ idea, onSubmit, onCancel }: DesignIdeaFormProps
       priority,
       status,
       isShared,
+      ownerId: idea?.ownerId || '',
+      ownerName: idea?.ownerName || '',
+      collaborators,
     });
   };
 
@@ -256,6 +273,23 @@ export function DesignIdeaForm({ idea, onSubmit, onCancel }: DesignIdeaFormProps
           )}
         </div>
       </div>
+
+      {/* Collaborators */}
+      {onSearchUsers && onAddCollaborator && onRemoveCollaborator && idea && (
+        <CollaboratorManager
+          collaborators={collaborators}
+          onAdd={async (userId, userName) => {
+            await onAddCollaborator(idea.id, userId, userName);
+            setCollaborators([...collaborators, { id: userId, name: userName }]);
+          }}
+          onRemove={async (userId) => {
+            await onRemoveCollaborator(idea.id, userId);
+            setCollaborators(collaborators.filter(c => c.id !== userId));
+          }}
+          onSearch={onSearchUsers}
+          followingIds={followingIds}
+        />
+      )}
 
       {/* Actions */}
       <div className="flex justify-end gap-3 pt-4">
