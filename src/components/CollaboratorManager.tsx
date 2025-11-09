@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { UserPlus, X } from 'lucide-react';
 import { Button } from './ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from './ui/dialog';
 import { UserSearch } from './UserSearch';
 import { Badge } from './ui/badge';
 
@@ -53,6 +53,9 @@ export function CollaboratorManager({
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Add Collaborator</DialogTitle>
+                <DialogDescription>
+                  Søk etter og legg til samarbeidspartnere til denne idéen
+                </DialogDescription>
               </DialogHeader>
               <UserSearch
                 onSearch={onSearch}

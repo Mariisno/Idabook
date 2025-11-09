@@ -9,6 +9,7 @@ import { Badge } from './ui/badge';
 import { Switch } from './ui/switch';
 import { X, Upload, Image as ImageIcon } from 'lucide-react';
 import { CollaboratorManager } from './CollaboratorManager';
+import { useLanguage } from '../utils/language-context';
 
 interface DesignIdeaFormProps {
   idea?: DesignIdea | null;
@@ -29,9 +30,11 @@ export function DesignIdeaForm({
   onRemoveCollaborator,
   followingIds = []
 }: DesignIdeaFormProps) {
+  const { t } = useLanguage();
   const [title, setTitle] = useState(idea?.title || '');
   const [description, setDescription] = useState(idea?.description || '');
   const [details, setDetails] = useState(idea?.details || '');
+  const [websiteUrl, setWebsiteUrl] = useState(idea?.websiteUrl || '');
   const [tags, setTags] = useState<string[]>(idea?.tags || []);
   const [images, setImages] = useState<string[]>(idea?.images || []);
   const [tagInput, setTagInput] = useState('');
@@ -93,6 +96,7 @@ export function DesignIdeaForm({
       title: title.trim(),
       description: description.trim(),
       details: details.trim(),
+      websiteUrl: websiteUrl.trim(),
       tags,
       images,
       priority,
@@ -108,10 +112,10 @@ export function DesignIdeaForm({
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Title */}
       <div className="space-y-2">
-        <Label htmlFor="title">Title *</Label>
+        <Label htmlFor="title">{t('title')} *</Label>
         <Input
           id="title"
-          placeholder="Enter your design idea title"
+          placeholder={t('titlePlaceholder')}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           required
@@ -120,10 +124,10 @@ export function DesignIdeaForm({
 
       {/* Description */}
       <div className="space-y-2">
-        <Label htmlFor="description">Description</Label>
+        <Label htmlFor="description">{t('description')}</Label>
         <Textarea
           id="description"
-          placeholder="Brief description of your design idea"
+          placeholder={t('descriptionPlaceholder')}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={3}
@@ -132,43 +136,55 @@ export function DesignIdeaForm({
 
       {/* Details */}
       <div className="space-y-2">
-        <Label htmlFor="details">Details & Notes</Label>
+        <Label htmlFor="details">{t('details')}</Label>
         <Textarea
           id="details"
-          placeholder="Add detailed notes, requirements, or any information you need to work on this later"
+          placeholder={t('detailsPlaceholder')}
           value={details}
           onChange={(e) => setDetails(e.target.value)}
           rows={6}
         />
       </div>
 
+      {/* Website URL */}
+      <div className="space-y-2">
+        <Label htmlFor="websiteUrl">{t('websiteUrl')}</Label>
+        <Input
+          id="websiteUrl"
+          type="url"
+          placeholder={t('websiteUrlPlaceholder')}
+          value={websiteUrl}
+          onChange={(e) => setWebsiteUrl(e.target.value)}
+        />
+      </div>
+
       {/* Priority and Status */}
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="priority">Priority</Label>
+          <Label htmlFor="priority">{t('priority')}</Label>
           <Select value={priority} onValueChange={(value: any) => setPriority(value)}>
             <SelectTrigger id="priority">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="low">Low</SelectItem>
-              <SelectItem value="medium">Medium</SelectItem>
-              <SelectItem value="high">High</SelectItem>
+              <SelectItem value="low">{t('low')}</SelectItem>
+              <SelectItem value="medium">{t('medium')}</SelectItem>
+              <SelectItem value="high">{t('high')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="status">Status</Label>
+          <Label htmlFor="status">{t('status')}</Label>
           <Select value={status} onValueChange={(value: any) => setStatus(value)}>
             <SelectTrigger id="status">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="idea">Idea</SelectItem>
-              <SelectItem value="in-progress">In Progress</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="archived">Archived</SelectItem>
+              <SelectItem value="idea">{t('idea')}</SelectItem>
+              <SelectItem value="in-progress">{t('inProgress')}</SelectItem>
+              <SelectItem value="completed">{t('completed')}</SelectItem>
+              <SelectItem value="archived">{t('archived')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -177,9 +193,9 @@ export function DesignIdeaForm({
       {/* Sharing */}
       <div className="flex items-center justify-between p-4 border rounded-lg bg-slate-50">
         <div className="flex-1">
-          <Label htmlFor="isShared" className="cursor-pointer">Share with others</Label>
+          <Label htmlFor="isShared" className="cursor-pointer">{t('shareIdea')}</Label>
           <p className="text-sm text-slate-600 mt-1">
-            Allow others to view this idea for collaboration
+            {t('shareDescription')}
           </p>
         </div>
         <Switch
@@ -191,17 +207,17 @@ export function DesignIdeaForm({
 
       {/* Tags */}
       <div className="space-y-2">
-        <Label htmlFor="tags">Tags</Label>
+        <Label htmlFor="tags">{t('tags')}</Label>
         <div className="flex gap-2">
           <Input
             id="tags"
-            placeholder="Add a tag and press Enter"
+            placeholder={t('tagsPlaceholder')}
             value={tagInput}
             onChange={(e) => setTagInput(e.target.value)}
             onKeyPress={handleKeyPress}
           />
           <Button type="button" onClick={handleAddTag} variant="outline">
-            Add
+            {t('add')}
           </Button>
         </div>
         {tags.length > 0 && (
@@ -224,7 +240,7 @@ export function DesignIdeaForm({
 
       {/* Images */}
       <div className="space-y-2">
-        <Label>Images</Label>
+        <Label>{t('images')}</Label>
         <div className="space-y-3">
           <input
             ref={fileInputRef}
@@ -241,7 +257,7 @@ export function DesignIdeaForm({
             className="w-full gap-2"
           >
             <Upload className="w-4 h-4" />
-            Upload Images
+            {t('images')}
           </Button>
           
           {images.length > 0 && (
@@ -268,7 +284,7 @@ export function DesignIdeaForm({
           {images.length === 0 && (
             <div className="flex flex-col items-center justify-center py-8 border-2 border-dashed rounded-lg bg-slate-50">
               <ImageIcon className="w-8 h-8 text-slate-400 mb-2" />
-              <p className="text-slate-500 text-sm">No images added yet</p>
+              <p className="text-slate-500 text-sm">{t('images')}</p>
             </div>
           )}
         </div>
@@ -294,10 +310,10 @@ export function DesignIdeaForm({
       {/* Actions */}
       <div className="flex justify-end gap-3 pt-4">
         <Button type="button" variant="outline" onClick={onCancel}>
-          Cancel
+          {t('cancel')}
         </Button>
         <Button type="submit">
-          {idea ? 'Update Idea' : 'Create Idea'}
+          {idea ? t('save') : t('newIdea')}
         </Button>
       </div>
     </form>

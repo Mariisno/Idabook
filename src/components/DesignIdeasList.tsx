@@ -2,8 +2,9 @@ import { DesignIdea } from '../App';
 import { DesignIdeaCard } from './DesignIdeaCard';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Search } from 'lucide-react';
+import { Search, Lightbulb, Share2, Users } from 'lucide-react';
 import { useState } from 'react';
+import { useLanguage } from '../utils/language-context';
 
 interface DesignIdeasListProps {
   ideas: DesignIdea[];
@@ -11,9 +12,18 @@ interface DesignIdeasListProps {
   onDelete: (id: string) => void;
   onView: (idea: DesignIdea) => void;
   readOnly?: boolean;
+  emptyStateType?: 'my-ideas' | 'discover' | 'following';
 }
 
-export function DesignIdeasList({ ideas, onEdit, onDelete, onView, readOnly = false }: DesignIdeasListProps) {
+export function DesignIdeasList({ 
+  ideas, 
+  onEdit, 
+  onDelete, 
+  onView, 
+  readOnly = false,
+  emptyStateType = 'my-ideas'
+}: DesignIdeasListProps) {
+  const { t } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
@@ -30,15 +40,38 @@ export function DesignIdeasList({ ideas, onEdit, onDelete, onView, readOnly = fa
     return matchesSearch && matchesStatus && matchesPriority;
   });
 
+  const getEmptyState = () => {
+    if (emptyStateType === 'discover') {
+      return {
+        icon: <Share2 className="w-8 h-8 text-slate-400" />,
+        title: t('emptyDiscover'),
+        description: t('emptyDiscoverDescription')
+      };
+    }
+    if (emptyStateType === 'following') {
+      return {
+        icon: <Users className="w-8 h-8 text-slate-400" />,
+        title: t('emptyFollowing'),
+        description: t('emptyFollowingDescription')
+      };
+    }
+    return {
+      icon: <Lightbulb className="w-8 h-8 text-slate-400" />,
+      title: t('emptyMyIdeas'),
+      description: t('emptyMyIdeasDescription')
+    };
+  };
+
   if (ideas.length === 0) {
+    const emptyState = getEmptyState();
     return (
       <div className="text-center py-16">
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-200 mb-4">
-          <Search className="w-8 h-8 text-slate-400" />
+          {emptyState.icon}
         </div>
-        <h3 className="text-slate-900 mb-2">No design ideas yet</h3>
-        <p className="text-slate-600">
-          Start capturing your creative concepts by adding your first idea
+        <h3 className="text-slate-900 mb-2">{emptyState.title}</h3>
+        <p className="text-slate-600 max-w-md mx-auto">
+          {emptyState.description}
         </p>
       </div>
     );
@@ -51,7 +84,7 @@ export function DesignIdeasList({ ideas, onEdit, onDelete, onView, readOnly = fa
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
           <Input
-            placeholder="Search ideas, tags..."
+            placeholder={t('searchIdeas')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
@@ -59,25 +92,25 @@ export function DesignIdeasList({ ideas, onEdit, onDelete, onView, readOnly = fa
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-full sm:w-40">
-            <SelectValue placeholder="Status" />
+            <SelectValue placeholder={t('status')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="idea">Idea</SelectItem>
-            <SelectItem value="in-progress">In Progress</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="archived">Archived</SelectItem>
+            <SelectItem value="all">{t('allStatus')}</SelectItem>
+            <SelectItem value="idea">{t('idea')}</SelectItem>
+            <SelectItem value="in-progress">{t('inProgress')}</SelectItem>
+            <SelectItem value="completed">{t('completed')}</SelectItem>
+            <SelectItem value="archived">{t('archived')}</SelectItem>
           </SelectContent>
         </Select>
         <Select value={priorityFilter} onValueChange={setPriorityFilter}>
           <SelectTrigger className="w-full sm:w-40">
-            <SelectValue placeholder="Priority" />
+            <SelectValue placeholder={t('priority')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Priority</SelectItem>
-            <SelectItem value="high">High</SelectItem>
-            <SelectItem value="medium">Medium</SelectItem>
-            <SelectItem value="low">Low</SelectItem>
+            <SelectItem value="all">{t('allPriority')}</SelectItem>
+            <SelectItem value="high">{t('high')}</SelectItem>
+            <SelectItem value="medium">{t('medium')}</SelectItem>
+            <SelectItem value="low">{t('low')}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -85,7 +118,7 @@ export function DesignIdeasList({ ideas, onEdit, onDelete, onView, readOnly = fa
       {/* Ideas Grid */}
       {filteredIdeas.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-slate-600">No ideas match your filters</p>
+          <p className="text-slate-600">{t('noMatchingIdeas')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

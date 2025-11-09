@@ -165,7 +165,12 @@ app.post("/make-server-8b6272cb/ideas", async (c) => {
     const { ideas } = await c.req.json();
     const key = `ideas:user:${userId}`;
     
+    console.log(`Saving ${ideas.length} ideas for user ${userId}`);
+    console.log('Shared ideas:', ideas.filter((i: any) => i.isShared).map((i: any) => ({ id: i.id, title: i.title, isShared: i.isShared })));
+    
     await kv.set(key, ideas);
+    
+    console.log('Ideas saved successfully to KV store');
     
     return c.json({ success: true });
   } catch (error) {
@@ -174,13 +179,11 @@ app.post("/make-server-8b6272cb/ideas", async (c) => {
   }
 });
 
-// Search users endpoint
+// Search users endpoint - public endpoint, no auth required
 app.get("/make-server-8b6272cb/users/search", async (c) => {
   try {
+    // Optional auth - if user is logged in, exclude them from results
     const userId = await verifyAuth(c.req.header('Authorization'));
-    if (!userId) {
-      return c.json({ error: 'Unauthorized' }, 401);
-    }
     
     const query = c.req.query('q')?.toLowerCase() || '';
     
@@ -192,9 +195,9 @@ app.get("/make-server-8b6272cb/users/search", async (c) => {
       return c.json({ error: 'Failed to search users' }, 500);
     }
     
-    // Filter by query and exclude current user
+    // Filter by query and exclude current user if logged in
     const filteredUsers = users
-      .filter(u => u.id !== userId)
+      .filter(u => userId ? u.id !== userId : true)
       .filter(u => {
         const name = u.user_metadata?.name?.toLowerCase() || '';
         const email = u.email?.toLowerCase() || '';
@@ -288,6 +291,57 @@ app.get("/make-server-8b6272cb/following", async (c) => {
   }
 });
 
+// Get following users with details endpoint
+app.get("/make-server-8b6272cb/following/details", async (c) => {
+  try {
+    const userId = await verifyAuth(c.req.header('Authorization'));
+    if (!userId) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+    
+    const followsKey = `follows:${userId}`;
+    const followingIds = await kv.get(followsKey) || [];
+    
+    // Get details for each followed user
+    const followingUsers = [];
+    for (const followedUserId of followingIds) {
+      try {
+        // Get user info from auth
+        const { data: { user }, error } = await supabase.auth.admin.getUserById(followedUserId);
+        
+        if (user) {
+          // Get user's profile (bio)
+          const profileKey = `profile:${followedUserId}`;
+          const profile = await kv.get(profileKey) || {};
+          
+          // Get count of public ideas
+          const ideasKey = `ideas:user:${followedUserId}`;
+          const ideas = await kv.get(ideasKey) || [];
+          const publicIdeasCount = Array.isArray(ideas) 
+            ? ideas.filter(idea => idea && idea.isShared).length 
+            : 0;
+          
+          followingUsers.push({
+            id: user.id,
+            name: user.user_metadata?.name || user.email,
+            email: user.email,
+            bio: profile.bio || '',
+            publicIdeasCount,
+          });
+        }
+      } catch (userError) {
+        console.log(`Error getting details for user ${followedUserId}:`, userError);
+        // Continue with other users
+      }
+    }
+    
+    return c.json({ users: followingUsers });
+  } catch (error) {
+    console.log('Get following details error:', error);
+    return c.json({ error: 'Failed to get following details' }, 500);
+  }
+});
+
 // Get feed of followed users' shared ideas
 app.get("/make-server-8b6272cb/feed/following", async (c) => {
   try {
@@ -326,22 +380,65 @@ app.get("/make-server-8b6272cb/feed/following", async (c) => {
   }
 });
 
-// Get public feed (all shared ideas)
-app.get("/make-server-8b6272cb/feed/public", async (c) => {
+// Debug endpoint to check KV store
+app.get("/make-server-8b6272cb/debug/kv", async (c) => {
   try {
     const userId = await verifyAuth(c.req.header('Authorization'));
     if (!userId) {
       return c.json({ error: 'Unauthorized' }, 401);
     }
     
+    console.log('=== DEBUG KV STORE ===');
+    
+    // Get all keys with prefix
+    const allKeys = await kv.getByPrefix('ideas:user:');
+    console.log(`Found ${allKeys.length} keys`);
+    
+    const debug = allKeys.map(item => {
+      const ideas = item.value as any[];
+      const sharedCount = Array.isArray(ideas) ? ideas.filter(i => i?.isShared).length : 0;
+      return {
+        key: item.key,
+        totalIdeas: Array.isArray(ideas) ? ideas.length : 0,
+        sharedIdeas: sharedCount,
+        ideas: Array.isArray(ideas) ? ideas.map(i => ({ 
+          id: i.id, 
+          title: i.title, 
+          isShared: i.isShared,
+          ownerId: i.ownerId 
+        })) : []
+      };
+    });
+    
+    console.log('Debug info:', JSON.stringify(debug, null, 2));
+    
+    return c.json({ debug });
+  } catch (error) {
+    console.log('Debug error:', error);
+    return c.json({ error: String(error) }, 500);
+  }
+});
+
+// Get public feed (all shared ideas) - public endpoint, no auth required
+app.get("/make-server-8b6272cb/feed/public", async (c) => {
+  try {
+    console.log('=== LOADING PUBLIC FEED ===');
+    
     let publicIdeas: any[] = [];
     try {
       const allKeys = await kv.getByPrefix('ideas:user:');
+      console.log(`Found ${allKeys.length} user keys in KV store`);
+      
       publicIdeas = allKeys
         .flatMap(item => {
           const ideas = item.value as any[];
-          return Array.isArray(ideas) ? ideas.filter(idea => idea && idea.isShared) : [];
+          const sharedIdeas = Array.isArray(ideas) ? ideas.filter(idea => idea && idea.isShared) : [];
+          console.log(`Key ${item.key}: ${ideas?.length || 0} total ideas, ${sharedIdeas.length} shared`);
+          return sharedIdeas;
         });
+      
+      console.log(`Total public ideas found: ${publicIdeas.length}`);
+      console.log('Public ideas:', publicIdeas.map(i => ({ id: i.id, title: i.title, isShared: i.isShared })));
       
       // Sort by updated date
       publicIdeas.sort((a, b) => 
@@ -424,6 +521,179 @@ app.delete("/make-server-8b6272cb/ideas/:ideaId/collaborators/:collaboratorId", 
   } catch (error) {
     console.log('Remove collaborator error:', error);
     return c.json({ error: 'Failed to remove collaborator' }, 500);
+  }
+});
+
+// Get user's public ideas - public endpoint
+app.get("/make-server-8b6272cb/users/:userId/ideas", async (c) => {
+  try {
+    const userId = c.req.param('userId');
+    
+    // Get user's ideas
+    const ideasKey = `ideas:user:${userId}`;
+    const ideas = await kv.get(ideasKey) || [];
+    
+    // Filter only shared/public ideas
+    const publicIdeas = Array.isArray(ideas) 
+      ? ideas.filter(idea => idea && idea.isShared)
+      : [];
+    
+    // Sort by updated date
+    publicIdeas.sort((a, b) => 
+      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+    
+    return c.json({ ideas: publicIdeas });
+  } catch (error) {
+    console.log('Get user ideas error:', error);
+    return c.json({ error: 'Failed to get user ideas' }, 500);
+  }
+});
+
+// Bug tracking endpoints
+
+// Create bug report - public endpoint
+app.post("/make-server-8b6272cb/bugs", async (c) => {
+  try {
+    // Optional auth - bugs can be created by guests or logged in users
+    const userId = await verifyAuth(c.req.header('Authorization'));
+    
+    const { title, description, userInfo } = await c.req.json();
+    
+    if (!title || !description) {
+      return c.json({ error: 'Title and description are required' }, 400);
+    }
+    
+    // Generate bug ID
+    const bugId = `bug_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    const bug = {
+      id: bugId,
+      title,
+      description,
+      status: 'open',
+      reportedBy: userId || 'guest',
+      reporterName: userInfo?.name || 'Anonymous',
+      reporterEmail: userInfo?.email || null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    
+    // Get all bugs
+    const bugsKey = 'bugs:all';
+    const bugs = await kv.get(bugsKey) || [];
+    bugs.unshift(bug); // Add to beginning
+    await kv.set(bugsKey, bugs);
+    
+    console.log('Bug created:', bugId);
+    
+    return c.json({ bug });
+  } catch (error) {
+    console.log('Create bug error:', error);
+    return c.json({ error: 'Failed to create bug report' }, 500);
+  }
+});
+
+// Get all bugs - public endpoint
+app.get("/make-server-8b6272cb/bugs", async (c) => {
+  try {
+    const bugsKey = 'bugs:all';
+    const bugs = await kv.get(bugsKey) || [];
+    
+    return c.json({ bugs });
+  } catch (error) {
+    console.log('Get bugs error:', error);
+    return c.json({ error: 'Failed to get bugs' }, 500);
+  }
+});
+
+// Add comment to bug - public endpoint
+app.post("/make-server-8b6272cb/bugs/:bugId/comments", async (c) => {
+  try {
+    // Optional auth - comments can be added by guests or logged in users
+    const userId = await verifyAuth(c.req.header('Authorization'));
+    
+    const bugId = c.req.param('bugId');
+    const { text, userInfo } = await c.req.json();
+    
+    if (!text) {
+      return c.json({ error: 'Comment text is required' }, 400);
+    }
+    
+    const commentId = `comment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    const comment = {
+      id: commentId,
+      bugId,
+      text,
+      userId: userId || 'guest',
+      userName: userInfo?.name || 'Anonymous',
+      userEmail: userInfo?.email || null,
+      createdAt: new Date().toISOString(),
+    };
+    
+    // Get comments for this bug
+    const commentsKey = `comments:bug:${bugId}`;
+    const comments = await kv.get(commentsKey) || [];
+    comments.push(comment);
+    await kv.set(commentsKey, comments);
+    
+    console.log('Comment added to bug:', bugId);
+    
+    return c.json({ comment });
+  } catch (error) {
+    console.log('Add comment error:', error);
+    return c.json({ error: 'Failed to add comment' }, 500);
+  }
+});
+
+// Get comments for a bug - public endpoint
+app.get("/make-server-8b6272cb/bugs/:bugId/comments", async (c) => {
+  try {
+    const bugId = c.req.param('bugId');
+    const commentsKey = `comments:bug:${bugId}`;
+    const comments = await kv.get(commentsKey) || [];
+    
+    return c.json({ comments });
+  } catch (error) {
+    console.log('Get comments error:', error);
+    return c.json({ error: 'Failed to get comments' }, 500);
+  }
+});
+
+// Update bug status - requires auth
+app.patch("/make-server-8b6272cb/bugs/:bugId/status", async (c) => {
+  try {
+    const userId = await verifyAuth(c.req.header('Authorization'));
+    if (!userId) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+    
+    const bugId = c.req.param('bugId');
+    const { status } = await c.req.json();
+    
+    if (!['open', 'closed', 'in-progress'].includes(status)) {
+      return c.json({ error: 'Invalid status' }, 400);
+    }
+    
+    // Get all bugs
+    const bugsKey = 'bugs:all';
+    const bugs = await kv.get(bugsKey) || [];
+    
+    // Update bug status
+    const updatedBugs = bugs.map(bug => {
+      if (bug.id === bugId) {
+        return { ...bug, status, updatedAt: new Date().toISOString() };
+      }
+      return bug;
+    });
+    
+    await kv.set(bugsKey, updatedBugs);
+    
+    return c.json({ success: true });
+  } catch (error) {
+    console.log('Update bug status error:', error);
+    return c.json({ error: 'Failed to update bug status' }, 500);
   }
 });
 

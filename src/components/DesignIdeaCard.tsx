@@ -5,6 +5,7 @@ import { Button } from './ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { MoreVertical, Edit, Trash2, Clock, User, Users } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
+import { useLanguage } from '../utils/language-context';
 
 interface DesignIdeaCardProps {
   idea: DesignIdea;
@@ -27,14 +28,16 @@ const statusColors = {
   archived: 'bg-slate-100 text-slate-600 border-slate-300',
 };
 
-const statusLabels = {
-  idea: 'Idea',
-  'in-progress': 'In Progress',
-  completed: 'Completed',
-  archived: 'Archived',
-};
-
 export function DesignIdeaCard({ idea, onEdit, onDelete, onView, readOnly = false }: DesignIdeaCardProps) {
+  const { t } = useLanguage();
+  
+  const statusLabels = {
+    idea: t('idea'),
+    'in-progress': t('inProgress'),
+    completed: t('completed'),
+    archived: t('archived'),
+  };
+  
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -62,25 +65,25 @@ export function DesignIdeaCard({ idea, onEdit, onDelete, onView, readOnly = fals
               <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                 <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }}>
                   <Edit className="w-4 h-4 mr-2" />
-                  Edit
+                  {t('edit')}
                 </DropdownMenuItem>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                       <Trash2 className="w-4 h-4 mr-2" />
-                      Delete
+                      {t('delete')}
                     </DropdownMenuItem>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Delete this idea?</AlertDialogTitle>
+                      <AlertDialogTitle>{t('deleteIdea')}</AlertDialogTitle>
                       <AlertDialogDescription>
-                        This action cannot be undone. This will permanently delete "{idea.title}".
+                        {t('deleteIdeaDescription')} "{idea.title}".
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={onDelete}>Delete</AlertDialogAction>
+                      <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+                      <AlertDialogAction onClick={onDelete}>{t('delete')}</AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
@@ -93,11 +96,11 @@ export function DesignIdeaCard({ idea, onEdit, onDelete, onView, readOnly = fals
             {statusLabels[idea.status]}
           </Badge>
           <Badge variant="outline" className={priorityColors[idea.priority]}>
-            {idea.priority.charAt(0).toUpperCase() + idea.priority.slice(1)}
+            {t(idea.priority as 'low' | 'medium' | 'high')}
           </Badge>
           {idea.isShared && (
             <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-300">
-              Shared
+              {t('shared')}
             </Badge>
           )}
         </div>
@@ -158,7 +161,7 @@ export function DesignIdeaCard({ idea, onEdit, onDelete, onView, readOnly = fals
       <CardFooter className="pt-3 border-t flex-col items-start gap-2">
         <div className="flex items-center gap-1.5 text-slate-500 text-xs w-full">
           <Clock className="w-3.5 h-3.5" />
-          <span>Updated {formatDate(idea.updatedAt)}</span>
+          <span>{t('updated')} {formatDate(idea.updatedAt)}</span>
         </div>
         
         {/* Owner and Collaborators */}

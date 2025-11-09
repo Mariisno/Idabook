@@ -1,4 +1,3 @@
-https://ideabook.figma.site/
 
   # Idéa book
 

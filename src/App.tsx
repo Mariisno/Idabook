@@ -4,12 +4,18 @@ import { DesignIdeaForm } from './components/DesignIdeaForm';
 import { DesignIdeaDetail } from './components/DesignIdeaDetail';
 import { AuthForm } from './components/AuthForm';
 import { UserSearch } from './components/UserSearch';
+import { UserProfile } from './components/UserProfile';
+import { FollowingList, FollowingUser } from './components/FollowingList';
+import { WelcomeScreen } from './components/WelcomeScreen';
+import { BugTracker } from './components/BugTracker';
+import { LanguageSelector } from './components/LanguageSelector';
 import { Button } from './components/ui/button';
 import { Plus, LogOut, Users, Search } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './components/ui/dialog';
 import { createClient, setSessionPersistence } from './utils/supabase/client';
 import { projectId, publicAnonKey } from './utils/supabase/info';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
+import { LanguageProvider, useLanguage } from './utils/language-context';
 
 export interface DesignIdea {
   id: string;
@@ -18,6 +24,7 @@ export interface DesignIdea {
   details: string;
   tags: string[];
   images: string[];
+  websiteUrl?: string;
   priority: 'low' | 'medium' | 'high';
   status: 'idea' | 'in-progress' | 'completed' | 'archived';
   isShared: boolean;
@@ -28,7 +35,8 @@ export interface DesignIdea {
   updatedAt: string;
 }
 
-export default function App() {
+function AppContent() {
+  const { t } = useLanguage();
   const [user, setUser] = useState<any>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [userIdeas, setUserIdeas] = useState<DesignIdea[]>([]);
@@ -36,11 +44,16 @@ export default function App() {
   const [followingFeed, setFollowingFeed] = useState<DesignIdea[]>([]);
   const [publicFeed, setPublicFeed] = useState<DesignIdea[]>([]);
   const [followingIds, setFollowingIds] = useState<string[]>([]);
+  const [followingUsers, setFollowingUsers] = useState<FollowingUser[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false);
+  const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false);
+  const [viewingProfile, setViewingProfile] = useState<{ userId: string; userName: string } | null>(null);
   const [editingIdea, setEditingIdea] = useState<DesignIdea | null>(null);
   const [viewingIdea, setViewingIdea] = useState<DesignIdea | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [isGuestMode, setIsGuestMode] = useState(false);
   const [supabase] = useState(() => createClient());
   const isInitialLoad = useRef(true);
 
@@ -56,6 +69,13 @@ export default function App() {
         setUser(session.user);
         setAccessToken(session.access_token);
         await loadIdeas(session.access_token);
+        
+        // Check if this is a new user (first login)
+        const hasSeenWelcome = localStorage.getItem('hasSeenWelcome');
+        if (!hasSeenWelcome) {
+          setShowWelcome(true);
+          localStorage.setItem('hasSeenWelcome', 'true');
+        }
       }
     } catch (error) {
       console.error('Session check error:', error);
@@ -114,6 +134,21 @@ export default function App() {
         const data = await response.json();
         setFollowingIds(data.following || []);
       }
+
+      // Also load detailed following users
+      const detailsResponse = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/make-server-8b6272cb/following/details`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (detailsResponse.ok) {
+        const detailsData = await detailsResponse.json();
+        setFollowingUsers(detailsData.users || []);
+      }
     } catch (error) {
       console.error('Failed to load following:', error);
     }
@@ -121,6 +156,7 @@ export default function App() {
 
   const loadFeeds = async (token: string) => {
     try {
+      console.log('Loading feeds...');
       // Load following feed
       const followingResponse = await fetch(
         `https://${projectId}.supabase.co/functions/v1/make-server-8b6272cb/feed/following`,
@@ -133,10 +169,12 @@ export default function App() {
 
       if (followingResponse.ok) {
         const followingData = await followingResponse.json();
+        console.log('Following feed loaded:', followingData.ideas?.length || 0, 'ideas');
         setFollowingFeed(followingData.ideas || []);
       }
 
       // Load public feed
+      console.log('Fetching public feed from backend...');
       const publicResponse = await fetch(
         `https://${projectId}.supabase.co/functions/v1/make-server-8b6272cb/feed/public`,
         {
@@ -146,9 +184,14 @@ export default function App() {
         }
       );
 
+      console.log('Public feed response status:', publicResponse.status);
       if (publicResponse.ok) {
         const publicData = await publicResponse.json();
+        console.log('Public feed response:', publicData);
+        console.log('Public feed loaded:', publicData.ideas?.length || 0, 'ideas', publicData.ideas);
         setPublicFeed(publicData.ideas || []);
+      } else {
+        console.error('Public feed error:', await publicResponse.text());
       }
     } catch (error) {
       console.error('Failed to load feeds:', error);
@@ -159,6 +202,7 @@ export default function App() {
     if (!accessToken) return;
 
     try {
+      console.log('Saving ideas to backend:', ideas.map(i => ({ id: i.id, title: i.title, isShared: i.isShared })));
       const response = await fetch(
         `https://${projectId}.supabase.co/functions/v1/make-server-8b6272cb/ideas`,
         {
@@ -174,9 +218,12 @@ export default function App() {
       if (!response.ok) {
         console.error('Failed to save ideas:', await response.text());
       } else {
+        console.log('Ideas saved successfully');
         // Check if any ideas are shared and reload feeds
         const hasSharedIdeas = ideas.some(idea => idea.isShared);
+        console.log('Has shared ideas:', hasSharedIdeas);
         if (hasSharedIdeas) {
+          console.log('Reloading feeds in 300ms...');
           // Small delay to ensure backend has processed the save
           setTimeout(() => {
             loadFeeds(accessToken);
@@ -197,6 +244,37 @@ export default function App() {
       saveIdeas(userIdeas);
     }
   }, [userIdeas, user, accessToken]);
+
+  // Load public feed for guest users
+  useEffect(() => {
+    if (!user && !isLoading && isGuestMode) {
+      const loadPublicFeedForGuests = async () => {
+        try {
+          console.log('Loading public feed for guest user...');
+          const publicResponse = await fetch(
+            `https://${projectId}.supabase.co/functions/v1/make-server-8b6272cb/feed/public`,
+            {
+              headers: {
+                'Authorization': `Bearer ${publicAnonKey}`,
+              },
+            }
+          );
+
+          if (publicResponse.ok) {
+            const publicData = await publicResponse.json();
+            console.log('Guest public feed loaded:', publicData.ideas?.length || 0, 'ideas');
+            setPublicFeed(publicData.ideas || []);
+          } else {
+            console.error('Guest public feed error:', await publicResponse.text());
+          }
+        } catch (error) {
+          console.error('Failed to load guest public feed:', error);
+        }
+      };
+      
+      loadPublicFeedForGuests();
+    }
+  }, [user, isLoading, isGuestMode]);
 
   const handleLogin = async (email: string, password: string, rememberMe: boolean) => {
     // Set session persistence before login
@@ -237,8 +315,10 @@ export default function App() {
       throw new Error(error.error || 'Failed to sign up');
     }
 
-    // After signup, log in
+    // After signup, log in and show welcome screen
     await handleLogin(email, password, true);
+    setShowWelcome(true);
+    localStorage.setItem('hasSeenWelcome', 'true');
   };
 
   const handleResetPassword = async (email: string) => {
@@ -287,6 +367,7 @@ export default function App() {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+    console.log('Adding new idea with isShared:', newIdea.isShared, newIdea);
     setUserIdeas([newIdea, ...userIdeas]);
     setIsDialogOpen(false);
   };
@@ -325,14 +406,15 @@ export default function App() {
   };
 
   const handleSearchUsers = async (query: string) => {
-    if (!accessToken) return [];
+    // Use publicAnonKey for guests, accessToken for logged in users
+    const authToken = accessToken || publicAnonKey;
     
     try {
       const response = await fetch(
         `https://${projectId}.supabase.co/functions/v1/make-server-8b6272cb/users/search?q=${encodeURIComponent(query)}`,
         {
           headers: {
-            'Authorization': `Bearer ${accessToken}`,
+            'Authorization': `Bearer ${authToken}`,
           },
         }
       );
@@ -349,7 +431,13 @@ export default function App() {
   };
 
   const handleFollowUser = async (userId: string) => {
-    if (!accessToken) return;
+    if (!accessToken) {
+      const shouldLogin = window.confirm(t('loginPrompt'));
+      if (shouldLogin) {
+        setIsGuestMode(false);
+      }
+      return;
+    }
     
     try {
       const isFollowing = followingIds.includes(userId);
@@ -368,19 +456,23 @@ export default function App() {
       );
 
       if (response.ok) {
-        // Update local state
-        if (isFollowing) {
-          setFollowingIds(followingIds.filter(id => id !== userId));
-        } else {
-          setFollowingIds([...followingIds, userId]);
-        }
-        
-        // Reload feeds
+        // Reload following list and feeds
+        await loadFollowing(accessToken);
         await loadFeeds(accessToken);
       }
     } catch (error) {
       console.error('Follow/unfollow error:', error);
     }
+  };
+
+  const handleViewProfile = (userId: string, userName: string) => {
+    setViewingProfile({ userId, userName });
+    setIsProfileDialogOpen(true);
+  };
+
+  const handleCloseProfile = () => {
+    setIsProfileDialogOpen(false);
+    setViewingProfile(null);
   };
 
   const handleAddCollaborator = async (ideaId: string, userId: string, userName: string) => {
@@ -453,18 +545,26 @@ export default function App() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
-        <p className="text-slate-600">Loading...</p>
+        <p className="text-slate-600">{t('loading')}</p>
       </div>
     );
   }
 
-  if (!user) {
+  // Show auth form if not logged in and not in guest mode
+  if (!user && !isGuestMode) {
     return (
-      <AuthForm 
-        onLogin={handleLogin} 
-        onSignup={handleSignup}
-        onResetPassword={handleResetPassword}
-      />
+      <div className="relative">
+        <AuthForm onLogin={handleLogin} onSignup={handleSignup} onResetPassword={handleResetPassword} />
+        <div className="absolute top-4 right-4">
+          <Button 
+            variant="ghost" 
+            onClick={() => setIsGuestMode(true)}
+            className="gap-2"
+          >
+            {t('continueAsGuest')}
+          </Button>
+        </div>
+      </div>
     );
   }
 
@@ -475,55 +575,147 @@ export default function App() {
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-slate-900">Design Ideas</h1>
+              <h1 className="text-slate-900">🎨 {t('appTitle')}</h1>
               <p className="text-slate-600 mt-2">
-                Capture and organize your creative concepts
+                {t('appSubtitle')}
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <Button onClick={() => setIsSearchDialogOpen(true)} variant="outline" className="gap-2">
-                <Search className="w-4 h-4" />
-                Find Users
-              </Button>
-              <Button onClick={() => setIsDialogOpen(true)} className="gap-2">
-                <Plus className="w-4 h-4" />
-                New Idea
-              </Button>
-              <Button onClick={handleLogout} variant="outline" className="gap-2">
-                <LogOut className="w-4 h-4" />
-                Logout
-              </Button>
+              <LanguageSelector />
+              {user ? (
+                <>
+                  <BugTracker 
+                    projectId={projectId}
+                    publicAnonKey={publicAnonKey}
+                    accessToken={accessToken}
+                    user={user}
+                  />
+                  <Button onClick={() => setIsSearchDialogOpen(true)} variant="outline" className="gap-2">
+                    <Search className="w-4 h-4" />
+                    {t('searchUsers')}
+                  </Button>
+                  <Button onClick={() => setIsDialogOpen(true)} className="gap-2">
+                    <Plus className="w-4 h-4" />
+                    {t('newIdea')}
+                  </Button>
+                  <Button onClick={handleLogout} variant="outline" className="gap-2">
+                    <LogOut className="w-4 h-4" />
+                    {t('logout')}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <BugTracker 
+                    projectId={projectId}
+                    publicAnonKey={publicAnonKey}
+                  />
+                  <Button onClick={() => setIsSearchDialogOpen(true)} variant="outline" className="gap-2">
+                    <Search className="w-4 h-4" />
+                    {t('searchUsers')}
+                  </Button>
+                  <Button 
+                    onClick={() => setIsGuestMode(false)}
+                    className="gap-2"
+                  >
+                    {t('loginRegister')}
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>
 
         {/* Ideas Tabs */}
-        <Tabs defaultValue="my-ideas" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="my-ideas">My Ideas</TabsTrigger>
-            <TabsTrigger value="discover" className="gap-2">
-              <Users className="w-4 h-4" />
-              Discover
-            </TabsTrigger>
-            <TabsTrigger value="following" className="gap-2">
-              Following ({followingIds.length})
-            </TabsTrigger>
-          </TabsList>
+        {user ? (
+          <Tabs defaultValue="my-ideas" className="space-y-6">
+            <TabsList>
+              <TabsTrigger value="my-ideas">{t('myIdeas')}</TabsTrigger>
+              <TabsTrigger value="discover" className="gap-2">
+                <Users className="w-4 h-4" />
+                {t('discover')}
+              </TabsTrigger>
+              <TabsTrigger value="following" className="gap-2">
+                {t('following')} ({followingIds.length})
+              </TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="my-ideas">
-            <DesignIdeasList 
-              ideas={userIdeas}
-              onEdit={handleEditClick}
-              onDelete={handleDeleteIdea}
-              onView={handleViewClick}
-            />
-          </TabsContent>
+            <TabsContent value="my-ideas">
+              <DesignIdeasList 
+                ideas={userIdeas}
+                onEdit={handleEditClick}
+                onDelete={handleDeleteIdea}
+                onView={handleViewClick}
+                emptyStateType="my-ideas"
+              />
+            </TabsContent>
 
-          <TabsContent value="discover">
-            <div className="mb-4">
-              <p className="text-slate-600">
-                Explore shared design ideas from the community
-              </p>
+            <TabsContent value="discover">
+              <div className="mb-4 flex items-center justify-between">
+                <p className="text-slate-600">
+                  {t('discoverDescription')}
+                </p>
+                {accessToken && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        const response = await fetch(
+                          `https://${projectId}.supabase.co/functions/v1/make-server-8b6272cb/debug/kv`,
+                          {
+                            headers: {
+                              'Authorization': `Bearer ${accessToken}`,
+                            },
+                          }
+                        );
+                        if (response.ok) {
+                          const data = await response.json();
+                          console.log('=== KV STORE DEBUG ===');
+                          console.log(JSON.stringify(data.debug, null, 2));
+                          alert('Debug info logged to console (F12)');
+                        }
+                      } catch (error) {
+                        console.error('Debug error:', error);
+                      }
+                    }}
+                  >
+                    Debug KV Store
+                  </Button>
+                )}
+              </div>
+              <DesignIdeasList 
+                ideas={publicFeed}
+                onEdit={() => {}}
+                onDelete={() => {}}
+                onView={handleViewClick}
+                readOnly
+                emptyStateType="discover"
+              />
+            </TabsContent>
+
+            <TabsContent value="following">
+              <div className="mb-4">
+                <p className="text-slate-600">
+                  {t('followingDescription')}
+                </p>
+              </div>
+              <FollowingList 
+                users={followingUsers}
+                onViewProfile={handleViewProfile}
+                onUnfollow={handleFollowUser}
+              />
+            </TabsContent>
+          </Tabs>
+        ) : (
+          // Guest view - only show Discover
+          <div className="space-y-6">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-slate-900 mb-2">{t('discover')}</h2>
+                <p className="text-slate-600">
+                  {t('discoverDescription')}
+                </p>
+              </div>
             </div>
             <DesignIdeasList 
               ideas={publicFeed}
@@ -531,31 +723,17 @@ export default function App() {
               onDelete={() => {}}
               onView={handleViewClick}
               readOnly
+              emptyStateType="discover"
             />
-          </TabsContent>
-
-          <TabsContent value="following">
-            <div className="mb-4">
-              <p className="text-slate-600">
-                Ideas from people you follow
-              </p>
-            </div>
-            <DesignIdeasList 
-              ideas={followingFeed}
-              onEdit={() => {}}
-              onDelete={() => {}}
-              onView={handleViewClick}
-              readOnly
-            />
-          </TabsContent>
-        </Tabs>
+          </div>
+        )}
 
         {/* Add/Edit Dialog */}
         <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
             <DialogHeader>
               <DialogTitle>
-                {editingIdea ? 'Edit Design Idea' : 'New Design Idea'}
+                {editingIdea ? t('editIdea') : t('newIdeaTitle')}
               </DialogTitle>
             </DialogHeader>
             <DesignIdeaForm
@@ -580,7 +758,7 @@ export default function App() {
         <Dialog open={isSearchDialogOpen} onOpenChange={setIsSearchDialogOpen}>
           <DialogContent className="max-w-2xl" aria-describedby={undefined}>
             <DialogHeader>
-              <DialogTitle>Find and Follow Users</DialogTitle>
+              <DialogTitle>{t('findFollowUsers')}</DialogTitle>
             </DialogHeader>
             <UserSearch
               onSearch={handleSearchUsers}
@@ -594,7 +772,7 @@ export default function App() {
         <Dialog open={!!viewingIdea} onOpenChange={handleViewDialogClose}>
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
             <DialogHeader>
-              <DialogTitle>{viewingIdea?.title || 'Design Idea Details'}</DialogTitle>
+              <DialogTitle>{viewingIdea?.title || t('ideaDetails')}</DialogTitle>
             </DialogHeader>
             {viewingIdea && (
               <DesignIdeaDetail 
@@ -604,7 +782,38 @@ export default function App() {
             )}
           </DialogContent>
         </Dialog>
+
+        {/* User Profile Dialog */}
+        <Dialog open={isProfileDialogOpen} onOpenChange={handleCloseProfile}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
+            <DialogHeader>
+              <DialogTitle>{viewingProfile?.userName || t('userProfile')}</DialogTitle>
+            </DialogHeader>
+            {viewingProfile && (
+              <UserProfile 
+                userId={viewingProfile.userId}
+                userName={viewingProfile.userName}
+                projectId={projectId}
+                publicAnonKey={publicAnonKey}
+                accessToken={accessToken}
+                onBack={handleCloseProfile}
+                onViewIdea={handleViewClick}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
+
+      {/* Welcome Screen for New Users */}
+      {showWelcome && <WelcomeScreen onClose={() => setShowWelcome(false)} />}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <LanguageProvider>
+      <AppContent />
+    </LanguageProvider>
   );
 }
